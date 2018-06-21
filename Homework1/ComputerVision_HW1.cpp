@@ -1,5 +1,5 @@
 /*******************************************************************************************************************//**
- * @file main.cpp
+ * @file ComputerVision_HW1.cpp
  * @brief A rudementary implementation of MS Paint
  * @author Shaun Sartin
  **********************************************************************************************************************/
@@ -9,6 +9,7 @@
 #include <string>
 #include "opencv2/opencv.hpp"
 
+//store necessary information for image manipulation
 struct imgCommands_
 {
 
@@ -22,7 +23,17 @@ struct imgCommands_
     int leftMouseButtonDown;
 };
 
-void paintBucketRecursion(int currX, int currY, cv::Vec3b oldColor, cv::Vec3b newColor, cv::Mat *image, int finishedFlag)
+/*******************************************************************************************************************//**
+ * @brief recursive function to use paint-bucket tool over contiguous same-color areas
+ * @param[in] currX: the x position of the pixel being currently examined
+ * @param[in] currY: the y position of the pixel being currently examined
+ * @param[in] oldColor: the color of the starting pixel before it was clicked
+ * @param[in] newColor: the replacement color
+ * @param[in] image: the memory address of the image
+ * @param[in] finishedFlag: a marker to finish recursion (true when all 4-neighbor pixels are finished being analyzed), 1 -> true, 0 -> false
+ * @author Shaun Sartin
+ **********************************************************************************************************************/
+void paintBucketRecursion(int currX, int currY, cv::Vec3b oldColor, cv::Vec3b newColor, cv::Mat* image, int finishedFlag)
 {
 
     if(image->at<cv::Vec3b>(cv::Point(currX, currY)) == newColor)
@@ -68,17 +79,17 @@ void paintBucketRecursion(int currX, int currY, cv::Vec3b oldColor, cv::Vec3b ne
 
 /*******************************************************************************************************************//**
  * @brief handler for image click callbacks
- * @param[in] mouse event
- * @param[in] x position of the mouse cursor
- * @param[in] y position of the mouse cursor
- * @param[in] flags string array of command line arguments
- * @param[in] userdata string array of command line arguments
+ * @param[in] event: mouse event
+ * @param[in] x: x position of the mouse cursor
+ * @param[in] y: y position of the mouse cursor
+ * @param[in] flags: unused parameter
+ * @param[in] imgCommands: a void* cast structure containing all the necessary elements for the image manipulation
  * @author Shaun Sartin
  **********************************************************************************************************************/
-static void clickCallback(int event, int x, int y, int flags, void* imgCommands)
+static void clickCallback(int event, int x, int y, int flags, void* imgManipulation)
 {
     cv::Point point(x, y);
-    struct imgCommands_* imgCommands1 = (struct imgCommands_*) imgCommands;
+    struct imgCommands_* imgCommands = (struct imgCommands_*) imgManipulation;
 
     int b;
     int g;
@@ -87,78 +98,74 @@ static void clickCallback(int event, int x, int y, int flags, void* imgCommands)
     switch(event)
     {
         case cv::EVENT_LBUTTONDOWN:
-            imgCommands1->leftMouseButtonDown = 1;
-            if(imgCommands1->commands[imgCommands1->commandIndex] == "Eyedropper")
+            imgCommands->leftMouseButtonDown = 1;
+            if(imgCommands->commands[imgCommands->commandIndex] == "Eyedropper")
             {
-                b = imgCommands1->image.at<cv::Vec3b>(point)[0];
-                g = imgCommands1->image.at<cv::Vec3b>(point)[1];
-                r = imgCommands1->image.at<cv::Vec3b>(point)[2];
-                imgCommands1->dropperColor = cv::Vec3b(b,g,r);
+                b = imgCommands->image.at<cv::Vec3b>(point)[0];
+                g = imgCommands->image.at<cv::Vec3b>(point)[1];
+                r = imgCommands->image.at<cv::Vec3b>(point)[2];
+                imgCommands->dropperColor = cv::Vec3b(b,g,r);
             }
-            else if(imgCommands1->commands[imgCommands1->commandIndex] == "Pencil")
+            else if(imgCommands->commands[imgCommands->commandIndex] == "Pencil")
             {
-                imgCommands1->image.at<cv::Vec3b>(point) = imgCommands1->dropperColor;
-                cv::imshow("imageIn", imgCommands1->image);
+                imgCommands->image.at<cv::Vec3b>(point) = imgCommands->dropperColor;
+                cv::imshow("imageIn", imgCommands->image);
                 cv::waitKey();
             }
-            else if(imgCommands1->commands[imgCommands1->commandIndex] == "Crop")
+            else if(imgCommands->commands[imgCommands->commandIndex] == "Crop")
             {
-                imgCommands1->lastPoint = point;
-                imgCommands1->lastPointFlag = 1;
+                imgCommands->lastPoint = point;
+                imgCommands->lastPointFlag = 1;
             }
-            else if(imgCommands1->commands[imgCommands1->commandIndex] == "Paint Bucket")
+            else if(imgCommands->commands[imgCommands->commandIndex] == "Paint Bucket")
             {
-                b = imgCommands1->image.at<cv::Vec3b>(point)[0];
-                g = imgCommands1->image.at<cv::Vec3b>(point)[1];
-                r = imgCommands1->image.at<cv::Vec3b>(point)[2];
+                b = imgCommands->image.at<cv::Vec3b>(point)[0];
+                g = imgCommands->image.at<cv::Vec3b>(point)[1];
+                r = imgCommands->image.at<cv::Vec3b>(point)[2];
                 cv::Vec3b oldColor(b, g, r);
-                paintBucketRecursion(x, y, oldColor, imgCommands1->dropperColor, &imgCommands1->image, 0);
-                cv::imshow("imageIn", imgCommands1->image);
+                paintBucketRecursion(x, y, oldColor, imgCommands->dropperColor, &imgCommands->image, 0);
+                cv::imshow("imageIn", imgCommands->image);
                 cv::waitKey();
             }
             break;
 
         case cv::EVENT_RBUTTONDOWN:
-            imgCommands1->commandIndex = imgCommands1->commandIndex + 1;
-            if(imgCommands1->commandIndex >= 5)
+            imgCommands->commandIndex = imgCommands->commandIndex + 1;
+            if(imgCommands->commandIndex >= 5)
             {
-                imgCommands1->commandIndex = 0;
+                imgCommands->commandIndex = 0;
             }
-            std::cout << "Current Tool: " << imgCommands1->commands[imgCommands1->commandIndex] << std::endl;
+            std::cout << "Current Tool: " << imgCommands->commands[imgCommands->commandIndex] << std::endl;
             break;
 
         case cv::EVENT_MOUSEMOVE:
-            if((imgCommands1->leftMouseButtonDown == 1) && (imgCommands1->commands[imgCommands1->commandIndex] == "Pencil"))
+            if((imgCommands->leftMouseButtonDown == 1) && (imgCommands->commands[imgCommands->commandIndex] == "Pencil"))
             {
-                imgCommands1->image.at<cv::Vec3b>(point) = imgCommands1->dropperColor;
-                cv::imshow("imageIn", imgCommands1->image);
+                imgCommands->image.at<cv::Vec3b>(point) = imgCommands->dropperColor;
+                cv::imshow("imageIn", imgCommands->image);
                 cv::waitKey();
             }
             break;
 
         case cv::EVENT_LBUTTONUP:
-            imgCommands1->leftMouseButtonDown = 0;
+            imgCommands->leftMouseButtonDown = 0;
 
-            if((imgCommands1->lastPointFlag == 1) && (imgCommands1->commands[imgCommands1->commandIndex] == "Crop"))
+            if((imgCommands->lastPointFlag == 1) && (imgCommands->commands[imgCommands->commandIndex] == "Crop"))
             {
-                cv::Rect cropArea = cv::Rect(imgCommands1->lastPoint, point);
-                imgCommands1->image = imgCommands1->image(cropArea);
-                cv::imshow("imageIn", imgCommands1->image);
+                cv::Rect cropArea = cv::Rect(imgCommands->lastPoint, point);
+                imgCommands->image = imgCommands->image(cropArea);
+                cv::imshow("imageIn", imgCommands->image);
                 cv::waitKey();
             }
             break;
 
         case cv::EVENT_LBUTTONDBLCLK:
-            if(imgCommands1->commands[imgCommands1->commandIndex] == "Reset")
+            if(imgCommands->commands[imgCommands->commandIndex] == "Reset")
             {
-                imgCommands1->image = imgCommands1->backupImage.clone();
-                cv::imshow("imageIn", imgCommands1->image);
+                imgCommands->image = imgCommands->backupImage.clone();
+                cv::imshow("imageIn", imgCommands->image);
                 cv::waitKey();
             }
-            break;
-
-        case cv::EVENT_RBUTTONDBLCLK:
-            cv::imwrite("OUTPUT.png", imgCommands1->image);
             break;
     }
 }
@@ -172,8 +179,17 @@ static void clickCallback(int event, int x, int y, int flags, void* imgCommands)
  **********************************************************************************************************************/
 int main(int argc, char **argv)
 {
-    // open the input image and save a backup
-    std::string inputFileName = "test.png"; //todo: be sure to change this!
+    std::string inputFileName;
+
+    if(argc > 1)
+    {
+        inputFileName = argv[1];
+    }
+    else
+    {
+        std::cout << "Error: You must pass argument for an image filename" << std::endl;
+        return 0;
+    }
 
     imgCommands_ imgCommands;
 
