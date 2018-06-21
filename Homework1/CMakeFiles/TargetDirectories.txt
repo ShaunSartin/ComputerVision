@@ -1,0 +1,3 @@
+/home/ubuntu/ComputerVision/Homework1/CMakeFiles/edit_cache.dir
+/home/ubuntu/ComputerVision/Homework1/CMakeFiles/rebuild_cache.dir
+/home/ubuntu/ComputerVision/Homework1/CMakeFiles/ComputerVision_HW1.dir
