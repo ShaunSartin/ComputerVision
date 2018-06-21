@@ -1,6 +1,0 @@
-# depslib dependency file v1.0
-1529337205 source:/home/ubuntu/ComputerVision_HW1/main.cpp
-	<iostream>
-	<string>
-	"opencv2/opencv.hpp"
-
