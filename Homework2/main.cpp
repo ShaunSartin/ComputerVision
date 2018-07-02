@@ -70,20 +70,22 @@ int main(int argc, char **argv)
         cv::Mat imageGrey;
         cv::cvtColor(imageIn, imageGrey, cv::COLOR_BGR2GRAY);
 
+	/*
         // Normalize greyscale image
         cv::Mat imageNormalized;
         cv::normalize(imageGrey, imageNormalized, 0, 255, cv::NORM_MINMAX, CV_8UC1);
         cv::Mat imageNormalizedResized = resizeKeepAspectRatio(imageNormalized, cv::Size(500,335), cv::Scalar(0,0,0));
+        */
 
-        // Equalize greyscale image
+	// Equalize greyscale image
         cv::Mat imageEqualized;
-        cv::equalizeHist(imageNormalized, imageEqualized);
+        cv::equalizeHist(imageGrey, imageEqualized);
         cv::Mat imageEqualizedResized = resizeKeepAspectRatio(imageEqualized, cv::Size(500,335), cv::Scalar(0,0,0));
 
         // Find the image edges
         cv::Mat imageEdges;
         const double cannyThreshold1 = 200;
-        const double cannyThreshold2 = 200;
+        const double cannyThreshold2 = 400;
         const int cannyAperture = 3;
         cv::Canny(imageEqualized, imageEdges, cannyThreshold1, cannyThreshold2, cannyAperture);
 
@@ -141,16 +143,15 @@ int main(int argc, char **argv)
         }
 
         // Resize image
-        cv::Mat imageResized;
-        imageResized = resizeKeepAspectRatio(imageEllipse, cv::Size(500,500), cv::Scalar(0,0,0));
+        cv::Mat imageEllipseResized;
+        imageEllipseResized = resizeKeepAspectRatio(imageEllipse, cv::Size(500,335), cv::Scalar(0,0,0));
 
         //cv::imshow("imageIn", imageIn);
-        cv::imshow("imageNormalized", imageNormalizedResized);
+        //cv::imshow("imageNormalized", imageNormalizedResized);
         cv::imshow("imageEqualized", imageEqualizedResized);
         cv::imshow("imageEdges", imageEdgesResized);
         cv::imshow("imageRectangles", imageRectanglesResized);
-        //cv::imshow("imageEllipse", imageEllipse);
-        cv::imshow("imageResized", imageResized);
+        cv::imshow("imageEllipse", imageEllipseResized);
         cv::waitKey();
 
     }
