@@ -12,6 +12,32 @@
 // Only allow a single command line argument
 #define NUM_COMNMAND_LINE_ARGUMENTS 1
 
+/*
+ * Taken from Alireza at:
+ * https://stackoverflow.com/questions/28562401/resize-an-image-to-a-square-but-keep-aspect-ratio-c-opencv
+ */
+cv::Mat resizeKeepAspectRatio(const cv::Mat &input, const cv::Size &dstSize, const cv::Scalar &bgcolor)
+{
+    cv::Mat output;
+
+    double h1 = dstSize.width * (input.rows/(double)input.cols);
+    double w2 = dstSize.height * (input.cols/(double)input.rows);
+    if( h1 <= dstSize.height) {
+        cv::resize( input, output, cv::Size(dstSize.width, h1));
+    } else {
+        cv::resize( input, output, cv::Size(w2, dstSize.height));
+    }
+
+    int top = (dstSize.height-output.rows) / 2;
+    int down = (dstSize.height-output.rows+1) / 2;
+    int left = (dstSize.width - output.cols) / 2;
+    int right = (dstSize.width - output.cols+1) / 2;
+
+    cv::copyMakeBorder(output, output, top, down, left, right, cv::BORDER_CONSTANT, bgcolor );
+
+    return output;
+}
+
 
 /*******************************************************************************************************************//**
  * @brief program entry point
@@ -22,8 +48,6 @@
  **********************************************************************************************************************/
 int main(int argc, char **argv)
 {
-    cv::Mat imageIn;
-
     // Validate and parse the command line arguments
     if(argc != NUM_COMNMAND_LINE_ARGUMENTS + 1)
     {
@@ -32,6 +56,7 @@ int main(int argc, char **argv)
     }
     else
     {
+        cv::Mat imageIn;
         imageIn = cv::imread(argv[1], CV_LOAD_IMAGE_COLOR);
 
         // Check for file error
@@ -41,19 +66,28 @@ int main(int argc, char **argv)
             return 0;
         }
 
-        // Store image metadata
-        int imageWidth = imageIn.size().width;
-        int imageHeight = imageIn.size().height;
-
+        // Convert to greyscale
         cv::Mat imageGrey;
         cv::cvtColor(imageIn, imageGrey, cv::COLOR_BGR2GRAY);
 
+        // Normalize greyscale image
+        cv::Mat imageNormalized;
+        cv::normalize(imageGrey, imageNormalized, 0, 255, cv::NORM_MINMAX, CV_8UC1);
+        cv::Mat imageNormalizedResized = resizeKeepAspectRatio(imageNormalized, cv::Size(500,335), cv::Scalar(0,0,0));
+
+        // Equalize greyscale image
+        cv::Mat imageEqualized;
+        cv::equalizeHist(imageNormalized, imageEqualized);
+        cv::Mat imageEqualizedResized = resizeKeepAspectRatio(imageEqualized, cv::Size(500,335), cv::Scalar(0,0,0));
+
         // Find the image edges
         cv::Mat imageEdges;
-        const double cannyThreshold1 = 100;
+        const double cannyThreshold1 = 200;
         const double cannyThreshold2 = 200;
         const int cannyAperture = 3;
-        cv::Canny(imageGrey, imageEdges, cannyThreshold1, cannyThreshold2, cannyAperture);
+        cv::Canny(imageEqualized, imageEdges, cannyThreshold1, cannyThreshold2, cannyAperture);
+
+        cv::Mat imageEdgesResized = resizeKeepAspectRatio(imageEdges, cv::Size(500,335), cv::Scalar(0,0,0));
 
         // Locate the image contours (after applying a threshold or canny)
         std::vector<std::vector<cv::Point> > contours;
@@ -61,14 +95,14 @@ int main(int argc, char **argv)
 
         // compute minimum area bounding rectangles
         std::vector<cv::RotatedRect> minAreaRectangles(contours.size());
-        for(int i = 0; i < contours.size(); i++)
+        for(unsigned int i = 0; i < contours.size(); i++)
         {
             // compute a minimum area bounding rectangle for the contour
             minAreaRectangles[i] = cv::minAreaRect(contours[i]);
         }
 
         // draw the rectangles
-        /*
+        cv::RNG rand(12345);
         cv::Mat imageRectangles = cv::Mat::zeros(imageEdges.size(), CV_8UC3);
         for(int i = 0; i < contours.size(); i++)
         {
@@ -80,11 +114,12 @@ int main(int argc, char **argv)
                 cv::line(imageRectangles, rectanglePoints[j], rectanglePoints[(j+1) % 4], color);
             }
         }
-        */
+
+        cv::Mat imageRectanglesResized = resizeKeepAspectRatio(imageRectangles, cv::Size(500,335), cv::Scalar(0,0,0));
 
         // fit ellipses to contours containing sufficient inliers
         std::vector<cv::RotatedRect> fittedEllipses(contours.size());
-        for(int i = 0; i < contours.size(); i++)
+        for(unsigned int i = 0; i < contours.size(); i++)
         {
             // compute an ellipse only if the contour has more than 5 points (the minimum for ellipse fitting)
             if(contours.at(i).size() > 5)
@@ -95,8 +130,8 @@ int main(int argc, char **argv)
 
         // draw the ellipses
         cv::Mat imageEllipse = cv::Mat::zeros(imageEdges.size(), CV_8UC3);
-        const int minEllipseInliers = 500;
-        for(int i = 0; i < contours.size(); i++)
+        const int minEllipseInliers = 300;
+        for(unsigned int i = 0; i < contours.size(); i++)
         {
             // draw any ellipse with sufficient inliers
             if(contours.at(i).size() > minEllipseInliers)
@@ -104,6 +139,19 @@ int main(int argc, char **argv)
                 cv::ellipse(imageEllipse, fittedEllipses[i], cv::Scalar(255,255,255), 2);
             }
         }
+
+        // Resize image
+        cv::Mat imageResized;
+        imageResized = resizeKeepAspectRatio(imageEllipse, cv::Size(500,500), cv::Scalar(0,0,0));
+
+        //cv::imshow("imageIn", imageIn);
+        cv::imshow("imageNormalized", imageNormalizedResized);
+        cv::imshow("imageEqualized", imageEqualizedResized);
+        cv::imshow("imageEdges", imageEdgesResized);
+        cv::imshow("imageRectangles", imageRectanglesResized);
+        //cv::imshow("imageEllipse", imageEllipse);
+        cv::imshow("imageResized", imageResized);
+        cv::waitKey();
 
     }
     return 0;
