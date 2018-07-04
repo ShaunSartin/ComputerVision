@@ -66,49 +66,52 @@ int main(int argc, char **argv)
             return 0;
         }
 
+        cv::resize(imageIn, imageIn, cv::Size(640,480));
+
         // Convert to greyscale
         cv::Mat imageGrey;
         cv::cvtColor(imageIn, imageGrey, cv::COLOR_BGR2GRAY);
 
-	/*
         // Normalize greyscale image
         cv::Mat imageNormalized;
         cv::normalize(imageGrey, imageNormalized, 0, 255, cv::NORM_MINMAX, CV_8UC1);
-        cv::Mat imageNormalizedResized = resizeKeepAspectRatio(imageNormalized, cv::Size(500,335), cv::Scalar(0,0,0));
-        */
-
-	// Equalize greyscale image
-        cv::Mat imageEqualized;
-        cv::equalizeHist(imageGrey, imageEqualized);
-        cv::Mat imageEqualizedResized = resizeKeepAspectRatio(imageEqualized, cv::Size(500,335), cv::Scalar(0,0,0));
+        cv::Mat imageNormalizedResized = resizeKeepAspectRatio(imageNormalized, cv::Size(640,480), cv::Scalar(0,0,0));
 
         // Find the image edges
         cv::Mat imageEdges;
-        const double cannyThreshold1 = 200;
-        const double cannyThreshold2 = 400;
+        const double cannyThreshold1 = 160;
+        const double cannyThreshold2 = 200;
         const int cannyAperture = 3;
-        cv::Canny(imageEqualized, imageEdges, cannyThreshold1, cannyThreshold2, cannyAperture);
-
-        cv::Mat imageEdgesResized = resizeKeepAspectRatio(imageEdges, cv::Size(500,335), cv::Scalar(0,0,0));
+        cv::Canny(imageNormalized, imageEdges, cannyThreshold1, cannyThreshold2, cannyAperture);
+        cv::Mat imageEdgesResized = resizeKeepAspectRatio(imageEdges, cv::Size(640,480), cv::Scalar(0,0,0));
 
         // Locate the image contours (after applying a threshold or canny)
         std::vector<std::vector<cv::Point> > contours;
-        cv::findContours(imageEdges, contours, cv::RETR_TREE, cv::CHAIN_APPROX_SIMPLE, cv::Point(0, 0));
+        cv::findContours(imageEdges, contours, cv::RETR_TREE, cv::CHAIN_APPROX_NONE, cv::Point(0, 0)); //NOTE: changed from CHAIN_APPROX_SIMPLE
+
+        // draw the contours
+        cv::Mat imageContours = cv::Mat::zeros(imageEdges.size(), CV_8UC3);
+        cv::RNG rand(12345);
+        for(int i = 0; i < contours.size(); i++)
+        {
+            cv::Scalar color = cv::Scalar(rand.uniform(0,256), rand.uniform(0,256), rand.uniform(0,256));
+            cv::drawContours(imageContours, contours, i, color);
+        }
+        cv::Mat imageContoursResized = resizeKeepAspectRatio(imageContours, cv::Size(640,480), cv::Scalar(0,0,0));
 
         // compute minimum area bounding rectangles
         std::vector<cv::RotatedRect> minAreaRectangles(contours.size());
-        for(unsigned int i = 0; i < contours.size(); i++)
+        for(int i = 0; i <contours.size(); i++)
         {
             // compute a minimum area bounding rectangle for the contour
             minAreaRectangles[i] = cv::minAreaRect(contours[i]);
         }
 
         // draw the rectangles
-        cv::RNG rand(12345);
         cv::Mat imageRectangles = cv::Mat::zeros(imageEdges.size(), CV_8UC3);
         for(int i = 0; i < contours.size(); i++)
         {
-            cv::Scalar color = cv::Scalar(rand.uniform(0, 256), rand.uniform(0,256), rand.uniform(0,256));
+            cv::Scalar color = cv::Scalar(rand.uniform(0, 256), rand.uniform(0, 256), rand.uniform(0, 256));
             cv::Point2f rectanglePoints[4];
             minAreaRectangles[i].points(rectanglePoints);
             for(int j = 0; j < 4; j++)
@@ -116,12 +119,12 @@ int main(int argc, char **argv)
                 cv::line(imageRectangles, rectanglePoints[j], rectanglePoints[(j+1) % 4], color);
             }
         }
+        cv::Mat imageRectanglesResized = resizeKeepAspectRatio(imageRectangles, cv::Size(640, 480), cv::Scalar(0,0,0));
 
-        cv::Mat imageRectanglesResized = resizeKeepAspectRatio(imageRectangles, cv::Size(500,335), cv::Scalar(0,0,0));
 
         // fit ellipses to contours containing sufficient inliers
         std::vector<cv::RotatedRect> fittedEllipses(contours.size());
-        for(unsigned int i = 0; i < contours.size(); i++)
+        for(int i = 0; i < contours.size(); i++)
         {
             // compute an ellipse only if the contour has more than 5 points (the minimum for ellipse fitting)
             if(contours.at(i).size() > 5)
@@ -130,28 +133,27 @@ int main(int argc, char **argv)
             }
         }
 
-        // draw the ellipses
+        // store ellipse in a vector
         cv::Mat imageEllipse = cv::Mat::zeros(imageEdges.size(), CV_8UC3);
-        const int minEllipseInliers = 300;
-        for(unsigned int i = 0; i < contours.size(); i++)
+        const int minEllipseInliers = 280;
+        for(int i = 0; i < contours.size(); i++)
         {
             // draw any ellipse with sufficient inliers
             if(contours.at(i).size() > minEllipseInliers)
             {
-                cv::ellipse(imageEllipse, fittedEllipses[i], cv::Scalar(255,255,255), 2);
+                cv::Scalar color = cv::Scalar(rand.uniform(0, 256), rand.uniform(0,256), rand.uniform(0,256));
+                cv::ellipse(imageEllipse, fittedEllipses[i], color, 2);
             }
         }
 
-        // Resize image
-        cv::Mat imageEllipseResized;
-        imageEllipseResized = resizeKeepAspectRatio(imageEllipse, cv::Size(500,335), cv::Scalar(0,0,0));
 
         //cv::imshow("imageIn", imageIn);
-        //cv::imshow("imageNormalized", imageNormalizedResized);
-        cv::imshow("imageEqualized", imageEqualizedResized);
+        cv::imshow("imageNormalized", imageNormalizedResized);
+        //cv::imshow("imageEqualized", imageEqualizedResized);
         cv::imshow("imageEdges", imageEdgesResized);
+        cv::imshow("imageContours", imageContoursResized);
         cv::imshow("imageRectangles", imageRectanglesResized);
-        cv::imshow("imageEllipse", imageEllipseResized);
+        cv::imshow("imageEllipse", imageEllipse);
         cv::waitKey();
 
     }
