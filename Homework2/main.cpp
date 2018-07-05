@@ -19,32 +19,6 @@
 #define NICKEL_COLOR cv::Scalar(0,255,255)
 #define QUARTER_COLOR cv::Scalar(0,255,0)
 
-/*
- * Taken from Alireza at:
- * https://stackoverflow.com/questions/28562401/resize-an-image-to-a-square-but-keep-aspect-ratio-c-opencv
- */
-cv::Mat resizeKeepAspectRatio(const cv::Mat &input, const cv::Size &dstSize, const cv::Scalar &bgcolor)
-{
-    cv::Mat output;
-
-    double h1 = dstSize.width * (input.rows/(double)input.cols);
-    double w2 = dstSize.height * (input.cols/(double)input.rows);
-    if( h1 <= dstSize.height) {
-        cv::resize( input, output, cv::Size(dstSize.width, h1));
-    } else {
-        cv::resize( input, output, cv::Size(w2, dstSize.height));
-    }
-
-    int top = (dstSize.height-output.rows) / 2;
-    int down = (dstSize.height-output.rows+1) / 2;
-    int left = (dstSize.width - output.cols) / 2;
-    int right = (dstSize.width - output.cols+1) / 2;
-
-    cv::copyMakeBorder(output, output, top, down, left, right, cv::BORDER_CONSTANT, bgcolor );
-
-    return output;
-}
-
 /*******************************************************************************************************************//**
  * @brief calculates Euclidean distance between two points
  * @param[in] point1
@@ -65,6 +39,13 @@ float euclidDistance(cv::Point2f pt1, cv::Point2f pt2)
     return sqrt(pow(x,2) + pow(y,2));
 }
 
+/*******************************************************************************************************************//**
+ * @brief used to sort RotatedRects based on their area (from smallest to greatest)
+ * @param[in] rect1 first RotatedRect
+ * @param[in] rect2 second RotatedRect
+ * @return true if rect1's area is smaller than rect2's area, otherwise return false
+ * @author Shaun Sartin
+ **********************************************************************************************************************/
 bool coinAreaSort(cv::RotatedRect rect1, cv::RotatedRect rect2)
 {
     return rect1.size.area() < rect2.size.area();
@@ -106,7 +87,6 @@ int main(int argc, char **argv)
         // Normalize greyscale image
         cv::Mat imageNormalized;
         cv::normalize(imageGrey, imageNormalized, 0, 255, cv::NORM_MINMAX, CV_8UC1);
-        cv::Mat imageNormalizedResized = resizeKeepAspectRatio(imageNormalized, cv::Size(640,480), cv::Scalar(0,0,0));
 
         // Find the image edges
         cv::Mat imageEdges;
@@ -114,11 +94,10 @@ int main(int argc, char **argv)
         const double cannyThreshold2 = 200;
         const int cannyAperture = 3;
         cv::Canny(imageNormalized, imageEdges, cannyThreshold1, cannyThreshold2, cannyAperture);
-        cv::Mat imageEdgesResized = resizeKeepAspectRatio(imageEdges, cv::Size(640,480), cv::Scalar(0,0,0));
 
         // Locate the image contours (after applying a threshold or canny)
         std::vector<std::vector<cv::Point> > contours;
-        cv::findContours(imageEdges, contours, cv::RETR_TREE, cv::CHAIN_APPROX_NONE, cv::Point(0, 0)); //NOTE: changed from CHAIN_APPROX_SIMPLE
+        cv::findContours(imageEdges, contours, cv::RETR_TREE, cv::CHAIN_APPROX_NONE, cv::Point(0, 0));
 
         // draw the contours
         cv::Mat imageContours = cv::Mat::zeros(imageEdges.size(), CV_8UC3);
@@ -128,7 +107,6 @@ int main(int argc, char **argv)
             cv::Scalar color = cv::Scalar(rand.uniform(0,256), rand.uniform(0,256), rand.uniform(0,256));
             cv::drawContours(imageContours, contours, i, color);
         }
-        cv::Mat imageContoursResized = resizeKeepAspectRatio(imageContours, cv::Size(640,480), cv::Scalar(0,0,0));
 
         // compute minimum area bounding rectangles
         std::vector<cv::RotatedRect> minAreaRectangles(contours.size());
@@ -150,8 +128,6 @@ int main(int argc, char **argv)
                 cv::line(imageRectangles, rectanglePoints[j], rectanglePoints[(j+1) % 4], color);
             }
         }
-        cv::Mat imageRectanglesResized = resizeKeepAspectRatio(imageRectangles, cv::Size(640, 480), cv::Scalar(0,0,0));
-
 
         // fit ellipses to contours containing sufficient inliers
         std::vector<cv::RotatedRect> fittedEllipses(contours.size());
@@ -192,7 +168,6 @@ int main(int argc, char **argv)
                     // if euclidean distance is too small, assume they wrap the same coin and remove one
                     if(euclidDistance(coinCandidates[i].center, coinCandidates[j].center) < minCenterDistance)
                     {
-                        //std::cout << "Attempting to remove duplicate ellipse" << std::endl;
                         auto iter = coinCandidates.begin() + i;
                         coinCandidates.erase(iter);
                     }
@@ -204,7 +179,7 @@ int main(int argc, char **argv)
         std::sort(coinCandidates.begin(), coinCandidates.end(), coinAreaSort);
 
         // draw candidates for coins
-        cv::Mat imageCoins = cv::Mat::zeros(imageEdges.size(), CV_8UC3);
+        cv::Mat imageCoins = imageIn.clone();
         float avgDimeArea = 0;
         float avgPennyArea = 0;
         float avgNickelArea = 0;
@@ -217,7 +192,6 @@ int main(int argc, char **argv)
         for(int i = 0; i < coinCandidates.size(); i++)
         {
             float currCoinSize = coinCandidates[i].size.area();
-            //std::cout << currCoinSize << std::endl;
 
             // We know there must be at least 1 dime, so the coin with the smallest area, a.k.a the first coin, should be a dime
             if(avgDimeArea == 0)
@@ -225,8 +199,6 @@ int main(int argc, char **argv)
                 avgDimeArea = currCoinSize;
                 dimeSizes.push_back(currCoinSize);
                 cv::ellipse(imageCoins, coinCandidates[0], DIME_COLOR, 2);
-                //cv::imshow("imageCoins", imageCoins);
-                //cv::waitKey();
                 continue;
             }
             else if(currCoinSize < (avgDimeArea + sameCoinMinSizeDistance))
@@ -234,8 +206,6 @@ int main(int argc, char **argv)
                 dimeSizes.push_back(currCoinSize);
                 avgDimeArea = accumulate(dimeSizes.begin(), dimeSizes.end(), 0.0) / dimeSizes.size();
                 cv::ellipse(imageCoins, coinCandidates[i], DIME_COLOR, 2);
-                //cv::imshow("imageCoins", imageCoins);
-                //cv::waitKey();
                 continue;
             }
 
@@ -245,8 +215,6 @@ int main(int argc, char **argv)
                 avgPennyArea = currCoinSize;
                 pennySizes.push_back(currCoinSize);
                 cv::ellipse(imageCoins, coinCandidates[i], PENNY_COLOR, 2);
-                //cv::imshow("imageCoins", imageCoins);
-                //cv::waitKey();
                 continue;
             }
             else if((currCoinSize < (avgPennyArea + sameCoinMinSizeDistance)) && (currCoinSize > (avgPennyArea - sameCoinMinSizeDistance)))
@@ -254,8 +222,6 @@ int main(int argc, char **argv)
                 pennySizes.push_back(currCoinSize);
                 avgPennyArea = accumulate(pennySizes.begin(), pennySizes.end(), 0.0) / pennySizes.size();
                 cv::ellipse(imageCoins, coinCandidates[i], PENNY_COLOR, 2);
-                //cv::imshow("imageCoins", imageCoins);
-                //cv::waitKey();
                 continue;
             }
 
@@ -265,8 +231,6 @@ int main(int argc, char **argv)
                 avgNickelArea = currCoinSize;
                 nickelSizes.push_back(currCoinSize);
                 cv::ellipse(imageCoins, coinCandidates[i], NICKEL_COLOR, 2);
-                //cv::imshow("imageCoins", imageCoins);
-                //cv::waitKey();
                 continue;
             }
             else if((currCoinSize > (avgNickelArea - sameCoinMinSizeDistance)) && (currCoinSize < (avgNickelArea + sameCoinMinSizeDistance)))
@@ -274,8 +238,6 @@ int main(int argc, char **argv)
                 nickelSizes.push_back(currCoinSize);
                 avgNickelArea = accumulate(nickelSizes.begin(), nickelSizes.end(), 0.0) / nickelSizes.size();
                 cv::ellipse(imageCoins, coinCandidates[i], NICKEL_COLOR, 2);
-                //cv::imshow("imageCoins", imageCoins);
-                //cv::waitKey();
                 continue;
             }
 
@@ -285,8 +247,6 @@ int main(int argc, char **argv)
                 avgQuarterArea = coinCandidates[i].size.area();
                 quarterSizes.push_back(currCoinSize);
                 cv::ellipse(imageCoins, coinCandidates[i], QUARTER_COLOR, 2);
-                //cv::imshow("imageCoins", imageCoins);
-                //cv::waitKey();
                 continue;
             }
             else if(currCoinSize > (avgQuarterArea - sameCoinMinSizeDistance))
@@ -294,8 +254,6 @@ int main(int argc, char **argv)
                 quarterSizes.push_back(currCoinSize);
                 avgQuarterArea = accumulate(quarterSizes.begin(), quarterSizes.end(), 0.0) / quarterSizes.size();
                 cv::ellipse(imageCoins, coinCandidates[i], QUARTER_COLOR, 2);
-                //cv::imshow("imageCoins", imageCoins);
-                //cv::waitKey();
                 continue;
             }
 
@@ -311,14 +269,6 @@ int main(int argc, char **argv)
         std::cout << std::setprecision(2);
         std::cout << "Total: $" << (0.01 * pennySizes.size()) + (0.05 * nickelSizes.size()) + (0.10 * dimeSizes.size()) + (0.25 * quarterSizes.size()) << std::endl;
 
-
-        cv::imshow("imageIn", imageIn);
-        //cv::imshow("imageNormalized", imageNormalizedResized);
-        //cv::imshow("imageEqualized", imageEqualizedResized);
-        //cv::imshow("imageEdges", imageEdgesResized);
-        //cv::imshow("imageContours", imageContoursResized);
-        //cv::imshow("imageRectangles", imageRectanglesResized);
-        //cv::imshow("imageEllipse", imageEllipse);
         cv::imshow("imageCoins", imageCoins);
         cv::waitKey();
 
