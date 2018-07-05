@@ -7,10 +7,17 @@
 // Include necessary dependencies
 #include <iostream>
 #include <string>
+#include <math.h>
+#include <iomanip>
 #include "opencv2/opencv.hpp"
 
 // Only allow a single command line argument
 #define NUM_COMNMAND_LINE_ARGUMENTS 1
+
+#define PENNY_COLOR cv::Scalar(0,0,255)
+#define DIME_COLOR cv::Scalar(255,0,0)
+#define NICKEL_COLOR cv::Scalar(0,255,255)
+#define QUARTER_COLOR cv::Scalar(0,255,0)
 
 /*
  * Taken from Alireza at:
@@ -38,6 +45,30 @@ cv::Mat resizeKeepAspectRatio(const cv::Mat &input, const cv::Size &dstSize, con
     return output;
 }
 
+/*******************************************************************************************************************//**
+ * @brief calculates Euclidean distance between two points
+ * @param[in] point1
+ * @param[in] point2
+ * @return Euclidean distance as a float
+ * @author Shaun Sartin
+ **********************************************************************************************************************/
+float euclidDistance(cv::Point2f pt1, cv::Point2f pt2)
+{
+    float x1 = pt1.x;
+    float y1 = pt1.y;
+    float x2 = pt2.x;
+    float y2 = pt2.y;
+
+    float x = x1 - x2;
+    float y = y1 - y2;
+
+    return sqrt(pow(x,2) + pow(y,2));
+}
+
+bool coinAreaSort(cv::RotatedRect rect1, cv::RotatedRect rect2)
+{
+    return rect1.size.area() < rect2.size.area();
+}
 
 /*******************************************************************************************************************//**
  * @brief program entry point
@@ -133,27 +164,162 @@ int main(int argc, char **argv)
             }
         }
 
-        // store ellipse in a vector
+        // store ellipses in a vector
+        std::vector<cv::RotatedRect> coinCandidates;
         cv::Mat imageEllipse = cv::Mat::zeros(imageEdges.size(), CV_8UC3);
-        const int minEllipseInliers = 280;
+        const int minEllipseInliers = 125;
         for(int i = 0; i < contours.size(); i++)
         {
-            // draw any ellipse with sufficient inliers
+            // draw any ellipse with sufficient inliers and add to candidate array
             if(contours.at(i).size() > minEllipseInliers)
             {
                 cv::Scalar color = cv::Scalar(rand.uniform(0, 256), rand.uniform(0,256), rand.uniform(0,256));
                 cv::ellipse(imageEllipse, fittedEllipses[i], color, 2);
+                coinCandidates.push_back(fittedEllipses[i]);
             }
         }
 
+        // check to see if any ellispes are essentially the same
+        float minCenterDistance = 10;
+        for(int i = 0; i < coinCandidates.size(); i++)
+        {
+            for(int j = 0; j < coinCandidates.size(); j++)
+            {
+                // ensure that an ellipse isn't compared with itself
+                if(i != j)
+                {
+                    // compare centers of the RotatedRects
+                    // if euclidean distance is too small, assume they wrap the same coin and remove one
+                    if(euclidDistance(coinCandidates[i].center, coinCandidates[j].center) < minCenterDistance)
+                    {
+                        //std::cout << "Attempting to remove duplicate ellipse" << std::endl;
+                        auto iter = coinCandidates.begin() + i;
+                        coinCandidates.erase(iter);
+                    }
+                }
+            }
+        }
 
-        //cv::imshow("imageIn", imageIn);
-        cv::imshow("imageNormalized", imageNormalizedResized);
+        // sort RotatedRects by their area (from smallest to greatest)
+        std::sort(coinCandidates.begin(), coinCandidates.end(), coinAreaSort);
+
+        // draw candidates for coins
+        cv::Mat imageCoins = cv::Mat::zeros(imageEdges.size(), CV_8UC3);
+        float avgDimeArea = 0;
+        float avgPennyArea = 0;
+        float avgNickelArea = 0;
+        float avgQuarterArea = 0;
+        float sameCoinMinSizeDistance = 250;
+        std::vector<float> dimeSizes;
+        std::vector<float> pennySizes;
+        std::vector<float> nickelSizes;
+        std::vector<float> quarterSizes;
+        for(int i = 0; i < coinCandidates.size(); i++)
+        {
+            float currCoinSize = coinCandidates[i].size.area();
+            //std::cout << currCoinSize << std::endl;
+
+            // We know there must be at least 1 dime, so the coin with the smallest area, a.k.a the first coin, should be a dime
+            if(avgDimeArea == 0)
+            {
+                avgDimeArea = currCoinSize;
+                dimeSizes.push_back(currCoinSize);
+                cv::ellipse(imageCoins, coinCandidates[0], DIME_COLOR, 2);
+                //cv::imshow("imageCoins", imageCoins);
+                //cv::waitKey();
+                continue;
+            }
+            else if(currCoinSize < (avgDimeArea + sameCoinMinSizeDistance))
+            {
+                dimeSizes.push_back(currCoinSize);
+                avgDimeArea = accumulate(dimeSizes.begin(), dimeSizes.end(), 0.0) / dimeSizes.size();
+                cv::ellipse(imageCoins, coinCandidates[i], DIME_COLOR, 2);
+                //cv::imshow("imageCoins", imageCoins);
+                //cv::waitKey();
+                continue;
+            }
+
+            // check for pennies
+            if(avgPennyArea == 0)
+            {
+                avgPennyArea = currCoinSize;
+                pennySizes.push_back(currCoinSize);
+                cv::ellipse(imageCoins, coinCandidates[i], PENNY_COLOR, 2);
+                //cv::imshow("imageCoins", imageCoins);
+                //cv::waitKey();
+                continue;
+            }
+            else if((currCoinSize < (avgPennyArea + sameCoinMinSizeDistance)) && (currCoinSize > (avgPennyArea - sameCoinMinSizeDistance)))
+            {
+                pennySizes.push_back(currCoinSize);
+                avgPennyArea = accumulate(pennySizes.begin(), pennySizes.end(), 0.0) / pennySizes.size();
+                cv::ellipse(imageCoins, coinCandidates[i], PENNY_COLOR, 2);
+                //cv::imshow("imageCoins", imageCoins);
+                //cv::waitKey();
+                continue;
+            }
+
+            // check for nickels
+            if(avgNickelArea == 0)
+            {
+                avgNickelArea = currCoinSize;
+                nickelSizes.push_back(currCoinSize);
+                cv::ellipse(imageCoins, coinCandidates[i], NICKEL_COLOR, 2);
+                //cv::imshow("imageCoins", imageCoins);
+                //cv::waitKey();
+                continue;
+            }
+            else if((currCoinSize > (avgNickelArea - sameCoinMinSizeDistance)) && (currCoinSize < (avgNickelArea + sameCoinMinSizeDistance)))
+            {
+                nickelSizes.push_back(currCoinSize);
+                avgNickelArea = accumulate(nickelSizes.begin(), nickelSizes.end(), 0.0) / nickelSizes.size();
+                cv::ellipse(imageCoins, coinCandidates[i], NICKEL_COLOR, 2);
+                //cv::imshow("imageCoins", imageCoins);
+                //cv::waitKey();
+                continue;
+            }
+
+            // check for quarters
+            if(avgQuarterArea == 0)
+            {
+                avgQuarterArea = coinCandidates[i].size.area();
+                quarterSizes.push_back(currCoinSize);
+                cv::ellipse(imageCoins, coinCandidates[i], QUARTER_COLOR, 2);
+                //cv::imshow("imageCoins", imageCoins);
+                //cv::waitKey();
+                continue;
+            }
+            else if(currCoinSize > (avgQuarterArea - sameCoinMinSizeDistance))
+            {
+                quarterSizes.push_back(currCoinSize);
+                avgQuarterArea = accumulate(quarterSizes.begin(), quarterSizes.end(), 0.0) / quarterSizes.size();
+                cv::ellipse(imageCoins, coinCandidates[i], QUARTER_COLOR, 2);
+                //cv::imshow("imageCoins", imageCoins);
+                //cv::waitKey();
+                continue;
+            }
+
+        }
+
+        //compute the amount of money in the image
+        std::cout << "Penny - " << pennySizes.size() << std::endl;
+        std::cout << "Nickel - " << nickelSizes.size() << std::endl;
+        std::cout << "Dime - " << dimeSizes.size() << std::endl;
+        std::cout << "Quarter - " << quarterSizes.size() << std::endl;
+
+        std::cout << std::fixed;
+        std::cout << std::setprecision(2);
+        std::cout << "Total: $" << (0.01 * pennySizes.size()) + (0.05 * nickelSizes.size()) + (0.10 * dimeSizes.size()) + (0.25 * quarterSizes.size()) << std::endl;
+
+
+        cv::imshow("imageIn", imageIn);
+        //cv::imshow("imageNormalized", imageNormalizedResized);
         //cv::imshow("imageEqualized", imageEqualizedResized);
-        cv::imshow("imageEdges", imageEdgesResized);
-        cv::imshow("imageContours", imageContoursResized);
-        cv::imshow("imageRectangles", imageRectanglesResized);
-        cv::imshow("imageEllipse", imageEllipse);
+        //cv::imshow("imageEdges", imageEdgesResized);
+        //cv::imshow("imageContours", imageContoursResized);
+        //cv::imshow("imageRectangles", imageRectanglesResized);
+        //cv::imshow("imageEllipse", imageEllipse);
+        cv::imshow("imageCoins", imageCoins);
         cv::waitKey();
 
     }
