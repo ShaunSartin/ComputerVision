@@ -1,7 +1,7 @@
 /*******************************************************************************************************************//**
- * @file
- * @brief
- * @author
+ * @file coinCounter.cpp
+ * @brief detect coins in an image, draw boundaries, and print the total amount in dollars
+ * @author Shaun Sartin
  **********************************************************************************************************************/
 
 // Include necessary dependencies
@@ -21,8 +21,8 @@
 
 /*******************************************************************************************************************//**
  * @brief calculates Euclidean distance between two points
- * @param[in] point1
- * @param[in] point2
+ * @param[in] point1 the first Point2f
+ * @param[in] point2 the second Point2f
  * @return Euclidean distance as a float
  * @author Shaun Sartin
  **********************************************************************************************************************/

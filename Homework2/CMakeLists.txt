@@ -31,6 +31,6 @@ set(GCC_COVERAGE_COMPILE_FLAGS "-std=c++11")
 add_definitions(${GCC_COVERAGE_COMPILE_FLAGS})
 
 # create individual projects
-add_executable(main main.cpp)
-target_link_libraries(main ${OpenCV_LIBS})
+add_executable(coinCounter coinCounter.cpp)
+target_link_libraries(coinCounter ${OpenCV_LIBS})
 
