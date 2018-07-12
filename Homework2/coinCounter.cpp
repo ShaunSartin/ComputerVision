@@ -269,6 +269,7 @@ int main(int argc, char **argv)
         std::cout << std::setprecision(2);
         std::cout << "Total: $" << (0.01 * pennySizes.size()) + (0.05 * nickelSizes.size()) + (0.10 * dimeSizes.size()) + (0.25 * quarterSizes.size()) << std::endl;
 
+        cv::imshow("imageIn", imageIn);
         cv::imshow("imageCoins", imageCoins);
         cv::waitKey();
 
