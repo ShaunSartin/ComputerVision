@@ -1,4 +1,4 @@
-project (Homework2)
+project (Homework3)
 cmake_minimum_required(VERSION 2.8)
 
 # configure OpenCV
@@ -31,6 +31,6 @@ set(GCC_COVERAGE_COMPILE_FLAGS "-std=c++11")
 add_definitions(${GCC_COVERAGE_COMPILE_FLAGS})
 
 # create individual projects
-add_executable(coinCounter coinCounter.cpp)
-target_link_libraries(coinCounter ${OpenCV_LIBS})
+add_executable(cameraCalibration cameraCalibration.cpp)
+target_link_libraries(cameraCalibration ${OpenCV_LIBS})
 
